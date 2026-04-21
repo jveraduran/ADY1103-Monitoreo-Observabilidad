@@ -40,6 +40,7 @@ systemctl enable nginx
 
 8. Lanza la instancia, espera a que esté en Running y copia su Dirección IPv4 Pública.
 
+---
 ## 💥 Fase 2: Generación de Tráfico y Cálculo Real del SLI
 
 Vamos a simular a 50 clientes intentando pagar, pero a mitad del proceso, la base de datos colapsará (apagaremos el servicio web).
@@ -88,6 +89,7 @@ Calcula tu SLI manualmente:
 
 Conclusión técnica: Tu SLI de disponibilidad para este ejercicio fue del 84%. ¡Has perdido un 16% de tus clientes por esa pequeña caída!
 
+---
 ## 📏 Fase 3: Diseño de Acuerdos de Negocio
 Ahora que entienden de dónde salen los números técnicos, dejen la terminal y reúnanse con su equipo para diseñar los acuerdos formales del negocio completo.
 
@@ -97,6 +99,7 @@ Definición de SLIs: Para cada interacción, redacten un SLI técnico siguiendo 
 
 Definición de SLOs: Asignen un porcentaje de compromiso a cada SLI. (Ej. El login debe tener éxito el 99.5% de las veces durante un mes).
 
+---
 ## ⚖️ Fase 4: Justificación del Presupuesto de Error
 Para su SLO más crítico (ej. Pagos), redacten una justificación respondiendo al CEO:
 
@@ -104,6 +107,7 @@ Para su SLO más crítico (ej. Pagos), redacten una justificación respondiendo 
 
 2. Si su SLO es del 99.5%, su Presupuesto de Error es del 0.5%. ¿Qué acciones tomará el equipo técnico si se gastan este presupuesto en los primeros 10 días del mes debido a errores de código? (Pista: ¿Congelan pases a producción?).
 
+---
 ## 📝 Fase 5: Entregable y Limpieza
 Consolidar en un documento el resultado de la Fase 3 y Fase 4 (Los 3 SLIs, los 3 SLOs y la justificación del Presupuesto de Error) detallando el cálculo práctico que obtuvieron en la Fase 2.
 
