@@ -74,8 +74,8 @@ Actividad de análisis:
 ## 📝 Fase 4: Entregable de Code Review (Checklist SRE)
 Para aprobar esta revisión, redacten un documento breve (1 página) respondiendo a las siguientes preguntas técnicas derivadas de su análisis:
 
-1. Si el día de mañana agregamos una base de datos MySQL en el puerto 3306 y le ponemos un exporter en el puerto 9104... ¿En qué archivo (docker-compose.yaml o prometheus.yml) y en qué sección exactos tendríamos que agregar la IP y el puerto para que Prometheus empiece a leerla?
+1. Si el día de mañana agregamos una base de datos MySQL en el puerto ```3306``` y le ponemos un exporter en el puerto 9104... ¿En qué archivo (```docker-compose.yaml``` o ```prometheus.yml```) y en qué sección exactos tendríamos que agregar la IP y el puerto para que Prometheus empiece a leerla?
 
-2. Expliquen con sus propias palabras el viaje completo de los datos del script de Python: ¿Cómo llega la temperatura aleatoria (app_temperature_celsius) desde el código Python hasta Grafana Cloud? Describan el flujo (Quién empuja a quién, y quién jala de quién).
+2. Expliquen con sus propias palabras el viaje completo de los datos del script de Python: ¿Cómo llega la temperatura aleatoria (```app_temperature_celsius```) desde el código Python hasta Grafana Cloud? Describan el flujo (Quién empuja a quién, y quién jala de quién).
 
-3. ¿Por qué el node-exporter necesita permisos especiales (pid: "host") y montar volúmenes del sistema operativo host, a diferencia de los otros contenedores?
+3. ¿Por qué el ```node-exporter``` necesita permisos especiales (```pid: "host"```) y montar volúmenes del sistema operativo host, a diferencia de los otros contenedores?
