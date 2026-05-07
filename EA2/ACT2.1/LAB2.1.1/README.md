@@ -38,7 +38,7 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 #### A. Crear archivo de configuración para Blackbox (blackbox.yml):
 Define cómo vamos a probar los servicios (vía HTTP e ICMP).
 
-```bash
+```yaml
 modules:
 http_2xx:
 prober: http
@@ -51,7 +51,7 @@ timeout: 5s
 ```
 
 #### B. Crear archivo de orquestación (docker-compose.yml):
-```bash
+```yaml
 version: "3.8"
 services:
 cadvisor:
