@@ -1,158 +1,97 @@
-# Laboratorio 2.1.4 - Guia Lab Despliegue Observabilidad Alloy
+# Laboratorio 2.1.2 - Guia Lab Analisis IaC DockerCompose
 
-Este laboratorio se centra en la "inteligencia": cómo recolectar esos datos, enviarlos a la nube e instrumentar una aplicación propia.
+Este laboratorio se centra en la preparación del host y el despliegue de los "productores de métricas" (Exporters) utilizando Docker.
 
 ## 📌 Resumen de la Actividad
-Utilizarás Grafana Alloy como recolector central para enviar métricas a Grafana Cloud y crearás métricas personalizadas en Python.
+Desplegarás la base técnica del stack de observabilidad. Aprenderás a orquestar contenedores que extraen métricas del sistema y de red, preparando el terreno para la recolección centralizada.
 
 ### 1️⃣ Prerrequisitos
-Haber completado el Lab 2.1.2 (Docker y Exporters activos).
+Servidor Debian/Ubuntu (Local o AWS EC2).
 
-Token de Grafana Cloud (```GCLOUD_RW_API_KEY```).
+Acceso con privilegios sudo.
 
-Puerto ```8081``` abierto para la App de Python.
+Puertos abiertos en Security Groups: 8080 (cAdvisor) y 9115 (Blackbox).
 
-Levantar la Infraestructura (Docker)
-Como el laboratorio es nuevo, primero debemos encender nuestros "sensores".
+### 2️⃣ Instalación del Motor de Orquestación (Docker)
 
-1. Instalar Docker:
+Actualizar e instalar dependencias:
 ```bash
-sudo apt update && sudo apt install -y docker.io docker-compose
-sudo systemctl start docker
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y ca-certificates curl gnupg lsb-release
 ```
-2. Lanzar contenedores:
 
+Configurar repositorio oficial de Docker:
 ```bash
-sudo docker-compose up -d
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
 ```
 
-### 2️⃣ Instalación de Grafana Alloy
-1. Reemplaza [TOKEN], [ID] y [URL] con tus credenciales de Grafana Cloud.
-
-    1. Inicia sesión en tu cuenta de Grafana.
-
-    2. En el menú de la izquierda, ve a Administration > Connections > Add new connection.
-
-    3. Busca "Linux Server" o directamente "Prometheus".
-
-    4. Busca la sección que dice "Details" o "Manual Configuration". Allí encontrarás:
-
-        - Remote Write Endpoint: Esa es tu TU_URL.
-
-        - Username / Instance ID: Ese es tu TU_ID.
-
-        - API Token: Debes generar uno con rol "MetricsPublisher"; ese es tu TU_TOKEN.
-
-2. Ejecutar el comando en la terminal
-Una vez que tengas los datos, abre la terminal de tu servidor (EC2 o Debian) y prepáralos así (sustituyendo los valores):
-
-
+Instalar Docker Engine y Compose:
 ```bash
-export GCLOUD_HOSTED_METRICS_ID="TU_ID"
-export GCLOUD_HOSTED_METRICS_URL="TU_URL"
-export GCLOUD_RW_API_KEY="TU_TOKEN"
-/bin/sh -c "$(curl -fsSL https://storage.googleapis.com/cloud-onboarding/alloy/scripts/install-linux.sh)"
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 ```
 
-### 3️⃣ Configuración de Alloy (/etc/alloy/config.alloy)
-Edita el archivo (sudo nano /etc/alloy/config.alloy) y agrega estos bloques al final:
+### 3️⃣ Infraestructura como Código (IaC)
 
+#### A. Crear archivo de configuración para Blackbox (blackbox.yml):
+Define cómo vamos a probar los servicios (vía HTTP e ICMP).
+
+```yaml
+modules:
+http_2xx:
+prober: http
+timeout: 5s
+http:
+method: GET
+icmp:
+prober: icmp
+timeout: 5s
+```
+
+#### B. Crear archivo de orquestación (docker-compose.yml):
+```yaml
+version: "3.8"
+services:
+cadvisor:
+image: gcr.io/cadvisor/cadvisor:latest
+container_name: cadvisor
+restart: unless-stopped
+ports:
+- "8080:8080"
+volumes:
+- /:/rootfs:ro
+- /var/run:/var/run:ro
+- /sys:/sys:ro
+- /var/lib/docker/:/var/lib/docker:ro
+privileged: true
+
+blackbox_exporter:
+image: prom/blackbox-exporter:latest
+container_name: blackbox_exporter
+restart: unless-stopped
+ports:
+- "9115:9115"
+volumes:
+- ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+```
+
+### 4️⃣ Despliegue y Validación
+Iniciar servicios:
 ```bash
-prometheus.scrape "docker_containers" {
-targets = [{ address = "localhost:8080" }]
-forward_to = [prometheus.remote_write.metrics_service.receiver]
-}
-
-prometheus.scrape "network_probes" {
-targets = [
-{
-address    = "localhost:9115",
-__param_target = "http://localhost:8080/metrics",
-instance       = "servidor_local",
-},
-]
-metrics_path = "/probe"
-params       = { module = ["http_2xx"] }
-forward_to   = [prometheus.remote_write.metrics_service.receiver]
-}
-
-prometheus.scrape "python_app" {
-targets = [{ address = "localhost:8081", instance = "app_python_01" }]
-forward_to = [prometheus.remote_write.metrics_service.receiver]
-}
+sudo docker compose up -d
 ```
 
-Reinicia el servicio:
-``` bash
-sudo alloy validate /etc/alloy/config.alloy
-sudo systemctl restart alloy
-```
-
-### 4️⃣ Instrumentación con Python
-Crea una App que genere sus propias métricas.
-
-Instalar entorno:
+Validar que los exportadores exponen datos:
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install prometheus_client flask
+curl -s http://localhost:8080/metrics | head -n 5
+curl -s http://localhost:9115/metrics | head -n 5
 ```
 
-Crear app.py:
-```bash
-from flask import Flask, Response
-from prometheus_client import CollectorRegistry, Gauge, generate_latest
-import random
+### 5️⃣ Diccionario de Métricas Técnicas
+container_cpu_usage_seconds_total: Consumo de CPU por ID de contenedor.
 
-app = Flask(name)
-registry = CollectorRegistry()
+container_memory_usage_bytes: RAM consumida por cada proceso Docker.
 
-temp_gauge = Gauge('app_temperature_celsius', 'Temperatura', registry=registry)
-
-@app.route('/metrics')
-def metrics():
-temp_gauge.set(random.uniform(20.0, 40.0))
-return Response(generate_latest(registry), mimetype='text/plain')
-
-if name == 'main':
-app.run(host='0.0.0.0', port=8081)
-```
-
-### 5️⃣ Verificación Final
-
-Una vez que Alloy esté corriendo y tu script de Python esté activo, sigue estos pasos para confirmar que los datos viajaron correctamente desde tu instancia EC2 hasta la nube:
-
-1. Acceso al Explorador de Datos
-Inicia sesión en tu cuenta de Grafana Cloud.
-
-En el menú lateral izquierdo, haz clic en el icono de la brújula (Explore).
-
-En el selector de fuente de datos (Dropdown superior izquierdo), asegúrate de seleccionar la opción que dice grafanacloud-tu-nombre-prom (es la fuente de tipo Prometheus).
-
-2. Ejecución de Consultas de Prueba (PromQL)
-En la barra de consultas, ingresa las siguientes métricas para validar cada componente:
-
-Validación de la App Python: Escribe ```app_temperature_celsius``` y presiona ```Shift + Enter```.
-
-¿Qué deberías ver? Una gráfica con valores que fluctúan entre 20 y 50. Si aparece la métrica en el autocompletado, la conexión es exitosa.
-
-Validación de Red (Blackbox): Escribe ```probe_success``` y ejecuta.
-
-¿Qué deberías ver? Un valor de ```1```. Esto indica que Blackbox está logrando "pinguear" exitosamente el puerto de cAdvisor (8080).
-
-Validación de Infraestructura (cAdvisor): Escribe ```container_cpu_usage_seconds_total``` y ejecuta.
-
-¿Qué deberías ver? Múltiples líneas que representan el consumo de CPU de cada contenedor corriendo en tu Docker.
-
-3. El "Semáforo" de Salud (Targets)
-Si no ves datos, puedes verificar qué está recibiendo Alloy directamente en su interfaz de diagnóstico (si tienes el puerto de Alloy abierto) o revisando los logs en la terminal:
-
-```bash
-# Ver los últimos 20 registros de Alloy para buscar errores de "Remote Write"
-sudo journalctl -u alloy -n 20
-```
-
-### 💡 Tips para el Alumno:
-Refresco de datos: Por defecto, la gráfica puede mostrar los últimos 1 hora. Cambia el rango de tiempo en la esquina superior derecha a "Last 5 minutes" y activa el "Live" o auto-refresh cada 10s para ver las métricas de Python en tiempo real.
-
-Etiquetas (Labels): Fíjate que al ejecutar una métrica, abajo aparecen etiquetas como ```instance="servidor_local"```. Estas fueron las que configuraste en el archivo ```config.alloy```.
+probe_success: Resultado del último chequeo de red (1=OK, 0=Fallo).

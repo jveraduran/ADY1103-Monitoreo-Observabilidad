@@ -28,7 +28,8 @@ mkdir -p ~/lab-node-exporter && cd ~/lab-node-exporter
 ## 🐳 3. Despliegue de Infraestructura con Docker (20 min)
 Para que Node Exporter vea el servidor real desde adentro de un contenedor, necesitamos romper el aislamiento de Docker usando network_mode: host y montando el sistema de archivos raíz.
 
-1. Crear el archivo docker-compose.yml:
+Crear el archivo docker-compose.yml:
+
 ```yaml
 version: "3.8"
 services:
@@ -52,50 +53,4 @@ services:
       - '--collector.bluetooth=false'
     ports:
       - "9100:9100"
-```
-
-2. Lanzar y verificar:
-
-```bash
-sudo docker-compose up -d
-curl -s http://localhost:9100/metrics | grep "node_cpu_seconds_total" | head -n 5
-```
-
-## 🔍 4. Análisis de Métricas y Tipos de Datos (20 min)
-Actividad para el alumno: Analizar la diferencia entre un Counter y un Gauge directamente en el exportador.
-
-Identificar un Counter: Busca ```node_network_receive_bytes_total```. Notarás que el valor es inmenso. Representa todo lo descargado desde que el servidor prendió.
-
-Identificar un Gauge: Busca ```node_memory_MemFree_bytes```. Este valor sube y baja constantemente según el uso actual.
-
-## 🚀 5. Integración con Grafana Alloy (20 min)
-Configuraremos Alloy para etiquetar estas métricas. Esto es vital en entornos profesionales para saber a qué equipo pertenece cada servidor.
-
-1. Instalación de Alloy: (Usa tus credenciales de Grafana Cloud)
-
-```bash
-export GCLOUD_HOSTED_METRICS_ID="TU_ID"
-export GCLOUD_HOSTED_METRICS_URL="TU_URL"
-export GCLOUD_RW_API_KEY="TU_TOKEN"
-/bin/sh -c "$(curl -fsSL https://storage.googleapis.com/cloud-onboarding/alloy/scripts/install-linux.sh)"
-```
-
-2. Configuración de Scraping: sudo nano /etc/alloy/config.alloy
-
-```bash
-prometheus.scrape "infraestructura_host" {
-  targets = [{ 
-    __address__ = "localhost:9100", 
-    instance    = "servidor-debian-lab",
-    laboratorio = "2.2.2",
-    estudiante  = "tu_nombre"
-  }]
-  forward_to = [prometheus.remote_write.metrics_service.receiver]
-}
-```
-
-3. Reinicio
-
-```bash
-sudo systemctl restart alloy
 ```

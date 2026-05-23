@@ -1,215 +1,222 @@
-# 📊 Laboratorio 2.3.4: Diseño y Construcción de Dashboards Custom desde Cero
+# 🚀 Laboratorio 2.3.2: Guía de Laboratorio Avanzada - Despliegue de Grafana, Conexión y Plantillas de la Comunidad
+Duración Estimada: 135 minutos (3 horas académicas de 45 minutos)
+Nivel: Intermedio
+Enfoque: Operaciones DevOps / Ingeniería de Fiabilidad de Sitios (SRE)
 
 ## 📌 1. Objetivos del Laboratorio
 Al finalizar este laboratorio, el estudiante será capaz de:
 
-1. Diseñar arquitecturas de tableros de control profesionales basados en metodologías SRE como USE (Utilization, Saturation, Errors).
+Orquestar un entorno completo de visualización y recolección de métricas persistentes utilizando Docker Compose.
 
-2. Construir paneles de visualización avanzados correlacionando múltiples tipos de datos (Gauges, Stats, Time Series).
+Comprender el modelo de seguridad, permisos de almacenamiento y aislamiento de red nativo de Grafana.
 
-3. Escribir expresiones avanzadas en lenguaje PromQL aplicando operadores aritméticos de conversión de escala y filtros de etiquetas eficientes.
+Conectar e interconectar almacenes de series temporales (Prometheus) utilizando DNS interno de contenedores.
 
-4. Desarrollar tableros de control multi-entorno parametrizados dinámicamente mediante el uso avanzado de variables basadas en consultas analíticas de metadatos.
+Descubrir, evaluar, importar y depurar plantillas estructuradas de dashboards de la comunidad oficial de Grafana (Dashboard ID: 1860).
 
-## 🧠 2. Principios de Diseño: La Metodología USE
-Para este laboratorio custom, estructuraremos nuestro dashboard siguiendo el modelo USE propuesto por Brendan Gregg para el análisis de rendimiento de componentes de infraestructura física o virtual:
+## 🧠 2. Fundamentos Teóricos y Arquitectura
+### 2.1 El Rol de Grafana en la Pila de Observabilidad
+Grafana funciona exclusivamente como una capa de consulta y visualización unificada. A diferencia de los sistemas tradicionales de monitoreo monolíticos, Grafana no almacena métricas de series temporales en su base de datos interna. Su base de datos integrada (típicamente SQLite) solo almacena metadatos: usuarios, contraseñas hash, permisos, nombres de paneles y configuraciones JSON de los dashboards.
 
-- Utilization (Utilización): El porcentaje de tiempo promedio en el que el recurso estuvo ocupado realizando trabajo útil (Ejemplo: % de uso de CPU).
+### 2.2 Redes de Contenedores y Resolución DNS de Docker
+Al desplegar infraestructura distribuida en Docker, el uso de direcciones IP estáticas (172.X.X.X) representa un antipatrón crítico. Docker incluye un servidor DNS embebido que resuelve el nombre de los servicios definidos en el archivo docker-compose.yml. Por lo tanto, cuando Grafana necesite consumir datos de Prometheus, la resolución se gestionará mediante el nombre del servicio http://prometheus:9090.
 
-- Saturation (Saturación): El grado en el cual el recurso tiene trabajo extra que no puede procesar de inmediato, usualmente reflejado en colas de espera (Ejemplo: Load Average).
+### 2.3 Plantillas Orientadas a Objetos (Dashboards como Código)
+Cada dashboard en Grafana es, en el fondo, un objeto JSON estructurado. La comunidad de Grafana comparte estas plantillas en un repositorio central. Cuando importamos el Dashboard ID 1860 ("Node Exporter Full"), estamos inyectando un archivo estructurado que mapea de manera estandarizada las métricas nativas expuestas por el componente Node Exporter.
 
-- Errors (Errores): El conteo explícito de eventos de fallo en los recursos del sistema.
+## 🛠️ 3. Prerrequisitos y Preparación del Entorno
+Garantizaremos un lienzo limpio eliminando conflictos previos y preparando estructuras de almacenamiento con persistencia real.
 
-## 🏗️ 3. Paso 1: Inicialización del Lienzo y Configuración de un Dashboard Custom
-1. Inicie sesión en su consola de Grafana (http://<IP>:3000).
-
-2. En la esquina superior derecha de la sección de Dashboards, haga clic en New -> New Dashboard.
-
-3. Acceda a las opciones globales del tablero haciendo clic en el icono del engranaje (Dashboard Settings) en la barra de herramientas superior:
-
-- Name: Monitoreo Core e Infraestructura - [Tus Iniciales]
-
-- Description: Dashboard de producción basado en métricas custom y la metodología SRE USE.
-
-- Refresh live dashboard: Seleccione 5s, 10s, 30s como opciones válidas y fije el auto-refresh global por defecto en 5s.
-
-4. Haga clic en Save dashboard en la esquina superior derecha. Asigne un mensaje de commit inicial: init: estructura base del lienzo de producción.
-
-## 📈 4. Paso 2: Implementación de la Capa SRE de CPU (Componente: Gauge Avanzado)
-Diseñaremos el panel principal de utilización de cómputo utilizando la compleja ecuación inversa del tiempo del procesador.
-
-1. En el lienzo principal, haga clic en el botón Add visualization.
-
-2. Seleccione su fuente de datos aprovisionada (Prometheus).
-
-3. En la sección de edición de consultas (pestaña Query), ingrese la expresión matemática exacta de PromQL:
-
+# 1. Actualizar repositorios e instalar utilidades esenciales
 ```bash
-(1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100
+sudo apt update && sudo apt install -y curl git systemctl docker.io docker-compose
 ```
 
-4. En el panel de propiedades derecho (Panel Options), ajuste los siguientes parámetros específicos de diseño:
-
-- Title: Utilización de CPU Global (Promedio 5m)
-- Description: Mide el porcentaje de tiempo real que los procesadores ejecutan tareas útiles fuera del estado Idle.
-- Visualización: Cambie el selector superior de Time Series a Gauge.
-
-5. Desplácese a la sección de configuración de escala (Standard Options):
-
-- Unit: Misc / Percent (0-100)
-- Min: 0
-- Max: 100
-
-6. Configure la política de colores críticos por umbral (Thresholds):
-
-- Base: Color Verde (Estado Saludable).
-- Añadir umbral en 70: Color Amarillo/Naranja (Estado de Alerta).
-- Añadir umbral en 90: Color Rojo (Saturación Crítica / Degradación de Servicio).
-
-7. Haga clic en Apply arriba a la derecha.
-
-## 🧠 5. Paso 3: Monitoreo de Memoria y Capacidad Operativa (Componente: Stat Panel)
-A diferencia de la CPU, la Memoria RAM es un recurso de tipo Gauge directo (sube y cambia constantemente de volumen disponible).
-
-1. Haga clic en el botón superior de añadir panel (Add -> Visualization).
-
-2. Query PromQL para calcular el porcentaje absoluto de ocupación de memoria en el sistema:
-
+# 2. Asegurar que el servicio de Docker esté activo y habilitado en el arranque
 ```bash
-((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100
+sudo systemctl enable --now docker
 ```
 
-3. Parámetros del panel derecho:
-
-- Title: Consumo de Memoria Volátil (RAM)
-- Visualización: Seleccione Stat.
-- Stat Options -> Graph Mode: Seleccione Area (esto incrustará una mini-gráfica sombreada debajo del valor numérico gigante).
-- Stat Options -> Color Mode: Seleccione Value.
-
-4. Sección Standard Options:
-
-- Unit: Misc / Percent (0-100)
-- Min: 0
-- Max: 100
-
-5. Configurar Umbrales (Thresholds):
-
-- Base: Verde
-- Umbral en 80: Amarillo
-- Umbral en 95: Rojo
-
-6. Haga clic en Apply.
-
-## 🌐 6. Paso 4: Capacidad y Rendimiento de Interfaces de Red (Componente: Time Series)
-Monitorearemos el volumen real de transferencia en la interfaz principal de comunicación.
-
-1. Haga clic en Add -> Visualization.
-
-2. Query PromQL para medir la tasa de bytes por segundo entrantes (Descarga):
-
+# 3. Crear el árbol de directorios para el laboratorio
 ```bash
-rate(node_network_receive_bytes_total{device="eth0"}[5m])
-```
-Nota: Si tu interfaz de red de internet se llama de otra forma (como enp0s3 o bond0), reemplaza la etiqueta device adecuadamente.
-
-3. Añada una segunda consulta dentro del mismo panel presionando el botón + Add query para medir la subida (Carga):
-
-```bash
-rate(node_network_transmit_bytes_total{device="eth0"}[5m])
+mkdir -p ~/lab-grafana-templates/grafana-storage
+mkdir -p ~/lab-grafana-templates/prometheus-config
 ```
 
-4. Configuración del formato de leyendas dinámicas (Options -> Legend):
-
-- Query A: Ingrese Tráfico Entrante (Descarga) - {{device}}
-- Query B: Ingrese Tráfico Saliente (Carga) - {{device}}
-
-5. Parámetros del panel derecho:
-
-- Title: Rendimiento de Red e Interfaces de Comunicación
-- Visualización: Time Series
-
-6. Sección Standard Options:
-
-- Unit: Data Rate / bytes/sec (B/s)
-
-7. Haga clic en Apply.
-
-## 🛠️ 7. Paso 5: Parametrización Dinámica Mediante Variables Analíticas
-Si dejamos el dashboard con las consultas actuales, este colapsará o se volverá confuso si conectamos múltiples servidores a nuestro Prometheus, ya que las métricas se mezclarían o se promediarían incorrectamente. Automatizaremos el entorno.
-
-1. Ingrese a Dashboard Settings (icono de engranaje superior).
-
-2. Seleccione el submenú Variables en la barra lateral izquierda.
-
-3. Haga clic en Add variable.
-
-4. Configure las opciones de metadatos exactas de la variable:
-
-- Name: servidor
-(Este nombre es el identificador que usaremos en el código PromQL como $servidor).
-
-- Label: Instancia de Servidor
-- Type: Query
-- Data source: Seleccione Prometheus.
-- Query: Ingrese la consulta analítica de etiquetas de Prometheus:
+# 4. Corregir permisos de almacenamiento para Grafana
+# Grafana corre internamente con el usuario no-root UID 472. Si el directorio del host
+# pertenece a root, el contenedor fallará al intentar inicializar su base de datos SQLite.
 ```bash
-label_values(node_cpu_seconds_total, instance)
-```
-- Selection Options: Active el interruptor Include All option y Multi-value.
-
-5. Haga clic en Apply o Save. Observe cómo aparece un selector desplegable dinámico en la parte superior del dashboard.
-
-### 🔄 Modificación de Paneles para Enlace Dinámico
-Debe editar cada uno de los paneles creados anteriormente para inyectar el filtro de la variable.
-
-- Edite el Panel de CPU: Modifique la consulta agregando el filtro dinámico por instancia:
-
-```bash
-(1 - avg by(instance) (rate(node_cpu_seconds_total{instance=~"$servidor", mode="idle"}[5m]))) * 100
+sudo chown -R 472:472 ~/lab-grafana-templates/grafana-storage
+cd ~/lab-grafana-templates
 ```
 
-- Edite el Panel de Memoria RAM: Modifique la consulta agregando el filtro:
-```bash
-((node_memory_MemTotal_bytes{instance=~"$servidor"} - node_memory_MemAvailable_bytes{instance=~"$servidor"}) / node_memory_MemTotal_bytes{instance=~"$servidor"}) * 100
+## 🐳 4. Paso 1: Definición de la Infraestructura como Código (IaC)
+Procederemos a escribir la configuración completa de nuestra pila de monitoreo.
+1. Crear el archivo de configuración de Prometheus (prometheus-config/prometheus.yml):
+
+```yaml
+global:
+  scrape_interval: 15s     # Frecuencia con la que Prometheus solicita métricas
+  evaluation_interval: 15s # Frecuencia con la que se evalúan las reglas de alerta
+
+scrape_configs:
+  - job_name: 'prometheus-interno'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'infraestructura-host'
+    static_configs:
+      - targets: ['node-exporter:9100']
 ```
 
-- Edite el Panel de Red: Modifique ambas consultas agregando el filtro:
-```bash
-rate(node_network_receive_bytes_total{instance=~"$servidor", device="eth0"}[5m])
+2. Crear el archivo principal de orquestación (docker-compose.yml):
+
+```yaml
+version: "3.8"
+
+networks:
+  observabilidad_net:
+    driver: bridge
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus-core
+    restart: unless-stopped
+    networks:
+      - observabilidad_net
+    volumes:
+      - ./prometheus-config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: node-exporter-agent
+    restart: unless-stopped
+    networks:
+      - observabilidad_net
+    pid: "host" # Crucial para que el exportador lea los procesos del sistema operativo real
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    ports:
+      - "9100:9100"
+
+  grafana:
+    image: grafana/grafana-oss:10.0.3
+    container_name: grafana-ui
+    restart: unless-stopped
+    networks:
+      - observabilidad_net
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-storage:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=SRE_Master_2026!
+      - GF_USERS_ALLOW_SIGN_UP=false
 ```
 
-Guarde el Dashboard. Ahora, al cambiar el valor del selector superior, los paneles mutarán dinámicamente sin necesidad de reescribir código.
-
-## 🧪 8. Paso 6: Desafío de Ingeniería SRE (Evaluación Práctica)
-Contexto del Problema: El equipo de operaciones necesita predecir fallas catastróficas por falta de almacenamiento en el disco duro raíz (/). Un dashboard reactivo que avise cuando el disco esté al 99% no da tiempo de reacción al equipo de soporte en entornos de alta carga.
-
-El Reto:
-
-1. Agregue un nuevo panel al final del dashboard.
-
-2. Utilice la función predictiva avanzada de PromQL predict_linear(vector_de_rango, tiempo_en_segundos).
-
-3. Desarrolle una consulta que tome la tendencia de llenado del sistema de archivos de la última hora ([1h]) y proyecte matemáticamente si el almacenamiento libre llegará a 0 bytes en los próximos 3 días (259200 segundos).
-
-4. El panel debe ser de tipo de visualización Stat y debe configurarse para mostrar el resultado final transformado a Gigabytes (GB) para facilitar la lectura del operador humano.
-
-Código PromQL de solución esperado para la evaluación:
-
+3. Desplegar los servicios en segundo plano:
 ```bash
-predict_linear(node_filesystem_free_bytes{instance=~"$servidor", mountpoint="/"}[1h], 259200) / 1024 / 1024 / 1024
+sudo docker-compose up -d
 ```
 
-Si el valor reflejado por la visualización es inferior a cero (ejemplo: -15 GB), significa que la tendencia lineal actual indica una saturación total e interrupción del servicio antes del plazo de 3 días.
+4. Validar que todos los contenedores estén en estado operativo (Up):
 
-## 📂 9. Exportación del Dashboard como Código (JSON Model)
-La infraestructura moderna dicta que los tableros de control no deben configurarse únicamente mediante clics manuales en interfaces de usuario web. Deben almacenarse en repositorios Git (GitOps).
+```bash
+sudo docker-compose ps
+```
 
-1. En la barra superior del dashboard, haga clic en el icono de Share (flecha curva o tres puntos conectados).
+## 🔗 5. Paso 2: Aprovisionamiento y Conexión de Data Sources
+1. Abra su navegador web e ingrese a la interfaz de Grafana: http://<IP_DE_TU_SERVIDOR>:3000
 
-2. Seleccione la pestaña Export.
+2. Autentíquese con las credenciales configuradas:
 
-3. Active la casilla Export for sharing externally.
+- Usuario: admin
 
-4. Haga clic en Save to file. Se descargará un archivo estructurado con formato .json.
+- Contraseña: SRE_Master_2026!
 
-Este archivo JSON es el plano completo del dashboard que puede aprovisionarse automáticamente en entornos multiservidor distribuidos en cualquier parte del mundo.
+3. En el menú de navegación izquierdo, diríjase a Connections -> Data Sources.
+
+4. Haga clic en el botón azul Add data source.
+
+5. Seleccione la opción Prometheus.
+
+6. En la sección de configuración de la conexión (HTTP):
+
+- URL: Ingrese http://prometheus:9090
+(Nota: No utilice localhost ni 127.0.0.1, ya que desde la perspectiva interna del contenedor de Grafana, localhost se refiere a sí mismo, no al host ni a Prometheus).
+
+7. Desplácese hasta la parte inferior de la pantalla y haga clic en Save & Test.
+
+8. Verifique la aparición del banner verde confirmando el éxito de la conexión: "Successfully queried the Prometheus API."
+
+## 🎨 6. Paso 3: Importación Estructurada del Dashboard ID 1860
+El Dashboard 1860 es desarrollado y mantenido por la comunidad para proveer un monitoreo completo de sistemas Linux utilizando Node Exporter.
+
+1. En la barra de navegación de Grafana, haga clic en el icono de Dashboards (cuadrículas).
+
+2. Haga clic en el botón desplegable New situado en la esquina superior derecha y seleccione Import.
+
+3. En el campo de texto etiquetado como Find and import dashboards via grafana.com, escriba el identificador único: 1860 y presione Load.
+
+4. Grafana leerá los metadatos de la API oficial y presentará las opciones de configuración del dashboard "Node Exporter Full".
+
+5. Configurar opciones de importación:
+
+- Folder: Seleccione General.
+
+- Prometheus: En el menú desplegable, seleccione la fuente de datos aprovisionada en el paso anterior (Prometheus).
+
+6. Haga clic en el botón Import.
+
+## 🔍 7. Paso 4: Análisis Forense de la Plantilla Importada
+Actividad de Análisis Crítico para el Estudiante:
+Una vez cargado el dashboard, observe las métricas reflejadas en tiempo real. Modifique el selector de tiempo en la esquina superior derecha a Last 5 minutes y active el refresco automático cada 10s.
+
+Responda las siguientes preguntas analizando el comportamiento de las gráficas:
+
+1. El Selector Superior (Variables): Cambie el selector de Job o Host. Observe cómo toda la pantalla cambia en cascada. Esto se debe a que las consultas internas no están ligadas a un servidor estático, sino a una variable dinámica denominada $node o $instance.
+
+2. Uptime: Ubique el panel que calcula el Uptime del servidor. Si detiene temporalmente el envío de métricas, ¿cómo calcula este panel el tiempo transcurrido? (Utiliza la función time() - node_boot_time_seconds).
+
+## 🧪 8. Paso 5: Validación Práctica de la Persistencia de Datos
+Uno de los mayores errores en laboratorios efímeros es no comprobar el estado de persistencia de las configuraciones de visualización.
+
+1. Regrese a la terminal Linux y ejecute una destrucción completa del entorno de contenedores:
+
+```bash
+sudo docker-compose down
+```
+
+2. Verifique que no queden contenedores en ejecución: sudo docker-compose ps
+
+3.  Vuelva a inicializar la infraestructura completa:
+
+```bash
+sudo docker-compose up -d
+```
+
+4. Recargue su navegador web en http://<IP_DE_TU_SERVIDOR>:3000. Inicie sesión.
+
+5. Vaya a la sección de Dashboards.
+
+Pregunta de Evaluación: ¿El Dashboard 1860 y la configuración de nuestra fuente de datos Prometheus siguen existiendo? Explique detalladamente por qué el directorio ./grafana-storage fue capaz de retener este estado a pesar de que el ciclo de vida del contenedor llegó a su fin.
+
+## 🛠️ 9. Tabla de Solución de Problemas (Troubleshooting)
+
+## 🛠️ 9. Tabla de Solución de Problemas (Troubleshooting)
+
+| Síntoma Encontrado | Causa Raíz Probable | Solución Operativa |
+| :--- | :--- | :--- |
+| El contenedor de Grafana se reinicia constantemente o muestra un error `Permission Denied` en los logs. | El directorio local `./grafana-storage` fue creado por el usuario root y el usuario interno `472` no tiene permisos de escritura. | Ejecutar de forma inmediata: `sudo chown -R 472:472 ./grafana-storage` y reiniciar la pila con `docker-compose restart`. |
+| Al presionar *Save & Test*, Grafana retorna un error del tipo `HTTP Error Bad Gateway` o `Connection Refused`. | Se ingresó una URL incorrecta como `http://localhost:9090` o Prometheus falló en su inicialización. | Cambiar la URL de la fuente de datos a la ruta del DNS interno de Docker: `http://prometheus:9090`. Comprobar logs de prometheus con `docker logs prometheus-core`. |
+| El Dashboard 1860 carga correctamente pero todos los paneles muestran un mensaje informando `No Data`. | Prometheus no está recolectando de forma efectiva las métricas de Node Exporter debido a una falla en el archivo de configuración `prometheus.yml`. | Acceder a `http://<IP>:9090/targets` y verificar si el endpoint `node-exporter:9100` está en estado verde (`UP`). |
