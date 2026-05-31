@@ -1,4 +1,4 @@
-# 📂 Guía de Laboratorio 2.2.2: Instalación y Análisis Profundo de Node Exporter
+# 📂 Guía de Laboratorio 2.2.4: Instalación y Análisis Profundo de Node Exporter
 Duración estimada: 90 minutos (2 bloques de 45 min).
 
 Objetivo: Comprender la arquitectura de observabilidad a nivel de sistema operativo y extraer métricas de hardware crudas para su transporte a la nube.
