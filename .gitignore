@@ -37,3 +37,7 @@ override.tf.json
 terraform.rc
 .env
 venv/
+
+# Archivos de sistema macOS
+.DS_Store
+**/.DS_Store
